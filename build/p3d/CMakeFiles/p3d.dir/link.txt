@@ -1,2 +1,0 @@
-/usr/bin/ar cr ../lib/libp3d.a  CMakeFiles/p3d.dir/Camera/niKinect.cpp.o CMakeFiles/p3d.dir/Camera/multiNiKinect.cpp.o CMakeFiles/p3d.dir/CoordinateSpace/baseCoordinateSpace.cpp.o CMakeFiles/p3d.dir/CoordinateSpace/cameraCoordinateSpace.cpp.o
-/usr/bin/ranlib ../lib/libp3d.a
