@@ -1,7 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Camera type="niKinect">
-	<serial serial="908h98hf9a8hdf98dh"/>
-	<calibration location="/data/calibration/calibration.yml"/>
-	<offset x="0.5" y="0.5" z="0.5"/>
-	<rotation rotation="0.5"/>
-</Camera>
