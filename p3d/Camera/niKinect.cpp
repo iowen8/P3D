@@ -2,7 +2,8 @@
 
 niKinect::niKinect() 
 {
-	camera = new OpenniGrabber(*niDriver, 0);
+	camera = new OpenniGrabber(niDriver, 0);
+	rgbdProcessor = new OpenniRGBDProcessor();
 	camera->setHighRgbResolution(true);
 	
 }
@@ -10,11 +11,12 @@ niKinect::niKinect()
 niKinect::niKinect(OpenniDriver* driver, int connectionId)
 {
 	camera = new OpenniGrabber(*driver, connectionId);
+	rgbdProcessor = new OpenniRGBDProcessor();
 	camera->setHighRgbResolution(true);
 	
 }
 
-OpenniDriver* niKinect::getOpenniDriver()
+OpenniDriver niKinect::getOpenniDriver()
 {
 	return niDriver;
 }
@@ -48,7 +50,7 @@ std::string niKinect::getCalibrationFile()
 
 void niKinect::setOpenniDriver(OpenniDriver* driver)
 {
-	niDriver = driver;
+	niDriver = *driver;
 }
 
 void niKinect::connectToCamera()

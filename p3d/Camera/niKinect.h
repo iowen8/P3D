@@ -14,7 +14,7 @@ public:
 	niKinect(OpenniDriver* driver, int connectionId);
 	~niKinect(){}
 
-	virtual OpenniDriver* getOpenniDriver();
+	virtual OpenniDriver getOpenniDriver();
 	OpenniGrabber* getCamera();
 	RGBDImage* getImage();
 	OpenniRGBDProcessor* getRGBDProcessor();
@@ -32,7 +32,7 @@ public:
 
 private: 
 	int numberOfCameras;
-	OpenniDriver* niDriver;
+	OpenniDriver niDriver;
 	OpenniGrabber* camera;
 	RGBDImage *image;
 	OpenniRGBDProcessor* rgbdProcessor;

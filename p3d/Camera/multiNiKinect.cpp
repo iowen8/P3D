@@ -5,7 +5,7 @@ multiNiKinect::multiNiKinect(int numberOfCams)
 	numberOfCameras = numberOfCams;	
 }
 
-OpenniDriver* multiNiKinect::getOpenniDriver()
+OpenniDriver multiNiKinect::getOpenniDriver()
 {
 	return niDriver;
 }

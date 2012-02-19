@@ -1,23 +1,22 @@
 /**
- * This file is part of the nestk library.
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- * Author: Nicolas Burrus <nicolas.burrus@uc3m.es>, (C) 2010
- */
+* This file is part of the nestk library.
+*
+* This program is free software: you can redistribute it and/or modify
+* it under the terms of the GNU Lesser General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+* Lesser General Public License for more details.
+*
+* You should have received a copy of the GNU Lesser General Public License
+* along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*
+* Author: Nicolas Burrus <nicolas.burrus@uc3m.es>, (C) 2010
+*/
 
-#include "calibration_common.h"
 
 #include <ntk/ntk.h>
 #include <ntk/camera/calibration.h>
@@ -26,121 +25,238 @@
 #include <opencv/cv.h>
 #include <fstream>
 
+#include <p3d/Camera/niKinect.h>
+
 #include <QDir>
 #include <QDebug>
 
 using namespace ntk;
 using namespace cv;
 
-// example command line (for copy-n-paste):
-// calibrate_one_camera -w 8 -h 6 -o camera.yml images
-enum patternTypes
+enum patternTypes { checkerBoard, circles };
+enum imageTypes { IR, RGB };
+
+struct ImageInfo 
 {
-	checkerBoard,
-	circles
+	int type;
+	std::string windowName;
+	cv::Mat3b *image;
+	cv::Mat3b *undistortedImage;
 };
 
-struct CalibrationInformation
+struct PatternInfo
 {
-std:: string oldCalibrationFile;
-std::string newCalibrationFile;
-patternTypes pattren;
-int patternWidth;
-int patternHeight;
-int squareSize;
+	int pattren;
+	int patternWidth;
+	int patternHeight;
+	float squareSize;
 };
 
-void calibrate_kinect_rgb(std::vector< std::vector<Point2f> >& stereo_corners)
+struct CalibrationInfo
 {
-    std::vector< std::vector<Point2f> > good_corners;
-    stereo_corners.resize(global::images_list.size());
-    for (int i_image = 0; i_image < global::images_list.size(); ++i_image)
-    {
-        QString filename = global::images_list[i_image];
-        QDir cur_image_dir (global::images_dir.absoluteFilePath(filename));
+//	std:: string oldCalibrationFile;
+//	std::string newCalibrationFile;
+	ImageInfo* imageInfo;
+	PatternInfo* patternInfo;
+	std::vector<Point2f>* rgbCorners;
+	std::vector<Point2f>* irCorners;
 
-        std::string full_filename = cur_image_dir.absoluteFilePath("raw/color.png").toStdString();
-        ntk_dbg_print(full_filename, 1);
-        cv::Mat3b image = imread(full_filename);
-        ntk_ensure(image.data, "Could not load color image");
+	std::vector<Point2f>* undistortedRgbCorners;
+	std::vector<Point2f>* undistortesIrCorners;
 
-        std::vector<Point2f> current_view_corners;
-        calibrationCorners(full_filename, "corners",
-                           global::opt_pattern_width(), global::opt_pattern_height(),
-                           current_view_corners, image, 1,
-                           global::pattern_type);
+	cv::Mat1d depthIntrinsics;
+	cv::Mat1d depthDistortion;
 
-        if (current_view_corners.size() == global::opt_pattern_height()*global::opt_pattern_width())
-        {
-            good_corners.push_back(current_view_corners);
-            stereo_corners[i_image] = current_view_corners;
-            show_corners(image, current_view_corners, 1);
-        }
-        else
-        {
-            ntk_dbg(0) << "Warning: corners not detected";
-            stereo_corners[i_image].resize(0);
-        }
-    }
+	cv::Mat1d rgbIntrinsics;
+	cv::Mat1d rgbDistortion;
 
-    ntk_dbg_print(global::opt_square_size(), 0);
-    std::vector< std::vector<Point3f> > pattern_points;
-    calibrationPattern(pattern_points,
-                       global::opt_pattern_width(),  global::opt_pattern_height(), global::opt_square_size(),
-                       good_corners.size());
+// stereo transform.
+	cv::Mat1d R, T;
+//	calibrationInfo() : rgbCorners(null), irCorners(null) {}
+};
 
-    ntk_assert(pattern_points.size() == good_corners.size(), "Invalid points size");
+void calibrationPattern(std::vector<cv::Point3f> & output, PatternInfo *pinfo)
+{
+	const int numberOfCorners = pinfo->patternWidth * pinfo->patternHeight;
 
-    int flags = CV_CALIB_USE_INTRINSIC_GUESS;
-    if (global::opt_ignore_distortions())
-        flags = CV_CALIB_ZERO_TANGENT_DIST;
 
-    std::vector<Mat> rvecs, tvecs;
-    double error = calibrateCamera(pattern_points, good_corners, global::calibration.rawRgbSize(),
-                                   global::calibration.rgb_intrinsics, global::calibration.rgb_distortion,
-                                   rvecs, tvecs, flags);
+	output.resize(numberOfCorners);
+	for(int j = 0; j < pinfo->patternHeight; ++j)
+		for(int k = 0; k < pinfo->patternWidth; ++k)
+	{
+		output[j*pinfo->patternWidth+k] = Point3f(k*pinfo->squareSize, j*pinfo->squareSize, 0);
+	}
 
-    if (global::opt_ignore_distortions())
-        global::calibration.rgb_distortion = 0.f;
 }
 
-void writeNestkMatrix()
-{
-    global::calibration.saveToFile(global::opt_output_file());
+
+//calibrate using opencv
+bool calibrateRGBWithOpencv(CalibrationInfo &calibInfo, bool distorted = true) {
+	std::cout<<"calibrating\n";
+	Size size (calibInfo.patternInfo->patternWidth, calibInfo.patternInfo->patternHeight);
+	std::vector<Point2f> currentCorners;	
+	cv::Mat scaledImage;
+	if (distorted)
+		scaledImage = calibInfo.imageInfo->image->clone();
+	else
+		scaledImage = calibInfo.imageInfo->undistortedImage->clone();
+
+	int flags = CV_CALIB_CB_NORMALIZE_IMAGE+CV_CALIB_CB_ADAPTIVE_THRESH;
+	bool ok = true;
+	ok = findChessboardCorners(scaledImage, size, currentCorners, flags);
+	std::cout<<"ok : "<<ok<<"\n";
+	if (ok)
+	{
+		cv::Mat grayImage;
+		cvtColor(scaledImage, grayImage, CV_BGR2GRAY);
+		cornerSubPix(grayImage, currentCorners, Size(5,5), Size(-1,-1), cvTermCriteria( CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
+	}
+	cv::Mat drawImage = scaledImage;
+	cv::Mat cornerMatrix(currentCorners.size(), 1, CV_32FC2);
+	for (int row = 0; row <currentCorners.size(); ++row) {
+		cornerMatrix.at<Point2f>(row,0) = currentCorners[row];
+	}
+
+	drawChessboardCorners(drawImage, size, cornerMatrix, ok);
+
+	// imwrite(image_name + ".corners.png", drawImage);
+	// if (!window_name.empty())
+		//{
+	imshow("dimg", drawImage);
+
+		//}
+
+	if (!ok)
+	{
+		currentCorners.clear();
+		return false;
+	}
+	std::cout<<"ok was fine \n";
+	if (distorted)
+		calibInfo.rgbCorners = &currentCorners;
+	else
+		calibInfo.undistortedRgbCorners = &currentCorners;
+
+	return true;
 }
 
-int main(int argc, char** argv)
+bool calibrateKinectRGB (CalibrationInfo &calibInfo)
 {
-    arg_base::set_help_option("--help");
-    arg_parse(argc, argv);
-    ntk::ntk_debug_level = 1;   
+	if (calibrateRGBWithOpencv(calibInfo, true))
+	{
+		std::cout<<"got back true \n";
+		bool ok;
+		std::vector<Point3f> patternPoints;
+		calibrationPattern(patternPoints, calibInfo.patternInfo);
+		const cv::Size imageSize(1280,1024);
+		std::cout<<"image size set\n";
+		std::vector<Mat> rvecs(calibInfo.rgbCorners->size()), tvecs(calibInfo.rgbCorners->size());
+		std::cout<<"after calibrate vec \n";
 
-    namedWindow("corners");
+		double error = calibrateCamera(patternPoints, *calibInfo.rgbCorners, imageSize, calibInfo.rgbIntrinsics, calibInfo.rgbDistortion, rvecs, tvecs);
+		std::cout<<"after calibrate camera \n";
+		*calibInfo.imageInfo->undistortedImage = calibInfo.imageInfo->image->clone();
+		undistort(*calibInfo.imageInfo->image, *calibInfo.imageInfo->undistortedImage, calibInfo.rgbIntrinsics, calibInfo.rgbDistortion);
+		ok = calibrateRGBWithOpencv(calibInfo, false);
 
-    if      (std::string(global::opt_pattern_type()) == "chessboard") global::pattern_type = PatternChessboard;
-    else if (std::string(global::opt_pattern_type()) == "circles") global::pattern_type = PatternCircles;
-    else if (std::string(global::opt_pattern_type()) == "asymcircles") global::pattern_type = PatternAsymCircles;
-    else fatal_error(format("Invalid pattern type: %s\n", global::opt_pattern_type()).c_str());
+		if (ok)
+		{
+			cv::Mat1f H;
+			estimate_checkerboard_pose(patternPoints,*calibInfo.undistortedRgbCorners,calibInfo.rgbIntrinsics,H);
+			Pose3D pose;
+			pose.setCameraParametersFromOpencv(calibInfo.rgbIntrinsics);
+			ntk_dbg_print(pose, 1);
+			pose.setCameraTransform(H);
+			std::vector<Point2f> projectedCorners;
+			foreach_idx(pattern_i, patternPoints)
+			{
+				ntk_dbg_print(patternPoints[pattern_i], 1);
+				Point3f p = pose.projectToImage(patternPoints[pattern_i]);
+				ntk_dbg_print(p, 1);
+				projectedCorners[pattern_i] = Point2f(p.x, p.y);
+			}
+			cv::Mat drawImage = *calibInfo.imageInfo->undistortedImage;
+			cv::Mat cornerMatrix(projectedCorners.size(), 1, CV_32FC2);
+			for (int row = 0; row <projectedCorners.size(); ++row)
+			{
+				cornerMatrix.at<Point2f>(row,0) = projectedCorners[row];
+			}
+			Size size (calibInfo.patternInfo->patternWidth, calibInfo.patternInfo->patternHeight);
 
-    global::calibration.loadFromFile(global::opt_input_file());
+			drawChessboardCorners(drawImage, size, cornerMatrix, ok);
+			calibInfo.undistortedRgbCorners = &projectedCorners;
+			imshow(calibInfo.imageInfo->windowName, drawImage);
+			return true;
+		}
+	}	
+	return false;
+}
 
-    global::images_dir = QDir(global::opt_image_directory());
-    ntk_ensure(global::images_dir.exists(), (global::images_dir.absolutePath() + " is not a directory.").toAscii());
-    global::images_list = global::images_dir.entryList(QStringList("view????"), QDir::Dirs, QDir::Name);
+void runTest(niKinect *kinect, const int numberOfImages)
+{
+	RGBDImage image1;
+	bool ir = false;
+	int count = 0;
+	ImageInfo imageI;
+	PatternInfo patternI;
+	patternI.patternWidth = 8;
+	patternI.patternHeight = 6;
+	patternI.squareSize = 0.025;
+	CalibrationInfo cInfo;
+	cInfo.patternInfo = &patternI;
+	kinect->getCamera()->start();
+	std::cout<<"in runtest"<<count<<"\n";
 
-    std::vector< std::vector<Point2f> > rgb_stereo_corners;
-    calibrate_kinect_rgb(rgb_stereo_corners);
+	while(count < numberOfImages)
+	{
+		if (ir)
+		{
+			imageI.type = 0;
+			imageI.windowName = "cornersIR";
+			kinect->getCamera()->setIRMode(true);
+			kinect->getCamera()->waitForNextFrame();
+			kinect->getCamera()->copyImageTo(image1);
+			kinect->getRGBDProcessor()->processImage(image1);
+			cv::Mat1b debug_depth_img1 = normalize_toMat1b(image1.rawIntensity());
+		//	imageI.image = &debug_depth_img1; 
+			cInfo.imageInfo = &imageI;
+			//	calibrateKinectIR(cInfo);
+			
+			++count;
+			ir = false;
+			imshow("ir", debug_depth_img1);
+			cv::waitKey(10);	
+		}
+		else
+		{
+			imageI.type = 1;
+			imageI.windowName = "cornersRGB";
+			kinect->getCamera()->setIRMode(false);
+			kinect->getCamera()->waitForNextFrame();
+			kinect->getCamera()->copyImageTo(image1);
+			kinect->getRGBDProcessor()->processImage(image1);
+			cv::Mat3b debug_color_img1 = image1.rawRgb();
+			imageI.image = &debug_color_img1; 
+			cInfo.imageInfo = &imageI;
+			//	calibrateKinectRGB(cInfo);
+			
+			++count;
+			ir = true;
+			imshow("color", debug_color_img1);
+			cv::waitKey(10);
+		}
 
-    double width_ratio = double(global::calibration.rgbSize().width)/global::calibration.depthSize().width;
-    double height_ratio = double(global::calibration.rgbSize().height)/global::calibration.depthSize().height;
+}
+kinect->getCamera()->stop();
 
-    global::calibration.rgb_intrinsics.copyTo(global::calibration.depth_intrinsics);
-    global::calibration.rgb_distortion.copyTo(global::calibration.depth_distortion);
-    global::calibration.depth_intrinsics(0,0) /= width_ratio;
-    global::calibration.depth_intrinsics(1,1) /= width_ratio;
-    global::calibration.depth_intrinsics(0,2) /= width_ratio;
-    global::calibration.depth_intrinsics(1,2) /= width_ratio;
+}
 
-    writeNestkMatrix();
-    return 0;
+
+int main()
+{
+	int numberOfImages = 50;
+	niKinect kinect;
+	std::cout<<"here\n";
+	kinect.connectToCamera();
+	runTest(&kinect,numberOfImages);
 }

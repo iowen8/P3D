@@ -10,7 +10,7 @@ public:
 	multiNiKinect(int numberOfCams);
 	~multiNiKinect();
 	
-	virtual OpenniDriver* getOpenniDriver();
+	virtual OpenniDriver getOpenniDriver();
 	MultipleGrabber* getCameras();
 	std::vector<RGBDImage>* getImages();
 	
@@ -25,7 +25,7 @@ public:
 
 private: 
 	int numberOfCameras;
-	OpenniDriver* niDriver;
+	OpenniDriver niDriver;
     MultipleGrabber* cameras;
     std::vector<RGBDImage> *images;
 };
