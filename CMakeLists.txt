@@ -5,6 +5,7 @@ if(COMMAND cmake_policy)
 endif(COMMAND cmake_policy)
 
 PROJECT(P3D)
+SET( CMAKE_VERBOSE_MAKEFILE on )
 SET(P3D_EMBEDDED_USE_FILE "p3d/UseEmbeddedP3d.cmake" CACHE INTERNAL "Nestk cmake file to be included by parent project")
 SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR} CACHE STATIC "Module path")
 SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
