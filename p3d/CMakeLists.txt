@@ -17,6 +17,10 @@ SET (p3d_sources
 		Camera/niKinect.cpp
 		Camera/multiNiKinect.h
 		Camera/multiNiKinect.cpp
+		Calibration/calibrateNiKinect.h
+		Calibration/calibrateNiKinect.cpp
+		Calibration/chessboard.h
+		Calibration/chessboard.cpp
 		CoordinateSpace/baseCoordinateSpace.h
 		CoordinateSpace/baseCoordinateSpace.cpp
 		CoordinateSpace/cameraCoordinateSpace.h
