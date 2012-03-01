@@ -47,9 +47,13 @@ struct CalibrationInfo
 	
 	std::vector<Point2f> rgbCorners;
 	std::vector<Point2f> irCorners;
+	std::vector<Point2f> primaryCorners;
+	std::vector<Point2f> secondaryCorners;
 
 	std::vector<Point2f> undistortedRgbCorners;
 	std::vector<Point2f> undistortedIrCorners;
+	std::vector<Point2f> undistortedPrimaryCorners;
+	std::vector<Point2f> undistortedSecondaryCorners;
 	
 	std::vector<DepthCalibrationPoint> depthValues;
 
@@ -71,11 +75,13 @@ class calibrateNiKinect
 public:
 	static void buildCalibrationPattern(std::vector< std::vector<cv::Point3f> >& output, PatternInfo *pinfo, int size);
 	static bool calibrateRGBWithOpencv(CalibrationInfo &calibInfo, bool distorted = true);
+	static bool calibrateMultiRGBWithOpencv(CalibrationInfo &calibInfo, bool distorted);
 	static bool calibrateIRWithOpencv(CalibrationInfo &calibInfo, bool distorted = true);
 	static bool calibrateKinectRGB (CalibrationInfo &calibInfo);
+	static bool calibrateMultiKinectRGB (CalibrationInfo &calibInfo);
 	static bool calibrateKinectIR(CalibrationInfo &calibInfo);
 	static bool calibrateKinectStereo(CalibrationInfo &calibInfo);
 	static void FindAndWriteMeans();
 	static void calibrateRGBIR(niKinect *kinect, int numberOfPairs, std::string outputFile);
-	static void calibrateMultiKinectRGB(niKinect *primaryKinect, niKinect *secondaryKinect, int numberOfPairs, std::string outputFile);
+	static void calibrateMultiKinect(niKinect *primaryKinect, niKinect *secondaryKinect, int numberOfPairs, std::string outputFile);
 };

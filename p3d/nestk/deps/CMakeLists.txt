@@ -18,14 +18,6 @@ INCLUDE( ${nestk_deps_SOURCE_DIR}/cmake/msvc.cmake )
 
 IF(NOT NESTK_USE_ROS)
 
-## GLEW
-IF(NESTK_USE_EMBEDDED_GLEW)
-  ## GLEW
-  set(GLEW_INCLUDE_DIR "${nestk_deps_SOURCE_DIR}/glew/include" CACHE FILEPATH "" FORCE)
-  set(GLEW_LIBRARIES "glew" CACHE FILEPATH "" FORCE)
-  ADD_SUBDIRECTORY("${nestk_deps_SOURCE_DIR}/glew")
-ENDIF()
-
   ## LIBUSB
   IF (NOT LIBUSB_1_INCLUDE_DIR)
     if(WIN32)

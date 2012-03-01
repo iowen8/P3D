@@ -22,7 +22,7 @@
 ntk::MultipleGrabber::~MultipleGrabber()
 {
     stop();
-
+	addedIndex = 0;
     foreach_idx(i, m_image_listeners)
     {
         delete m_image_listeners[i];
@@ -41,7 +41,7 @@ void ntk::MultipleGrabber::setAlternativeDisconnectMode(bool enable)
     start();
 }
 
-void ntk::MultipleGrabber::addGrabber(RGBDGrabber* grabber)
+int ntk::MultipleGrabber::addGrabber(RGBDGrabber* grabber)
 {
     m_grabbers.push_back(grabber);
     ImageListener* listener = new ImageListener(this);
@@ -49,6 +49,8 @@ void ntk::MultipleGrabber::addGrabber(RGBDGrabber* grabber)
     m_image_listeners.push_back(listener);
     m_temp_grabbed_images.resize(m_grabbers.size());
     m_grabbed_images.resize(m_grabbers.size());
+	
+	return addedIndex++;
 }
 
 bool ntk::MultipleGrabber::connectToDevice()
@@ -69,6 +71,16 @@ bool ntk::MultipleGrabber::disconnectFromDevice()
         ok &= m_grabbers[i]->disconnectFromDevice();
     }
     return ok;
+}
+
+ntk::RGBDGrabber* ntk::MultipleGrabber::getGrabber(int index)
+{
+	return m_grabbers[index];
+}
+
+std::vector<ntk::RGBDGrabber*> ntk::MultipleGrabber::getGrabbers()
+{
+	return m_grabbers;
 }
 
 void ntk::MultipleGrabber::onImageUpdated(EventBroadcaster *sender)

@@ -11,6 +11,7 @@ class niKinect
 {   
 public:
 	niKinect();
+	niKinect(std::string configurationFile);
 	niKinect(OpenniDriver* driver, int connectionId);
 	~niKinect(){}
 

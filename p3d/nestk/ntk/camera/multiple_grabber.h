@@ -48,11 +48,13 @@ public:
      * This is useful when using multiple kinects to avoid inteferences.
      */
     void setAlternativeDisconnectMode(bool enable);
-    void addGrabber(RGBDGrabber* grabber);
+    int addGrabber(RGBDGrabber* grabber);
 
 public:
     virtual bool connectToDevice();
     virtual bool disconnectFromDevice();
+	RGBDGrabber* getGrabber(int index);
+	std::vector<RGBDGrabber*> getGrabbers();
     virtual void copyImagesTo(std::vector<RGBDImage>& images);
     virtual void copyImageTo(RGBDImage& image);
     virtual void setSynchronous(bool sync);
@@ -74,6 +76,7 @@ private:
     std::vector<RGBDImage> m_grabbed_images;
     std::set<RGBDGrabber*> m_updated_grabbers;
     bool m_disconnect_alternatively;
+	int addedIndex;
 };
 
 } // ntk

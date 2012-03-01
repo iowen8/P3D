@@ -154,6 +154,70 @@ bool calibrateNiKinect::calibrateRGBWithOpencv(CalibrationInfo &calibInfo, bool 
 	return false;
 }
 
+bool calibrateNiKinect::calibrateMultiRGBWithOpencv(CalibrationInfo &calibInfo, bool distorted)
+{
+	Size size (calibInfo.patternInfo->patternWidth, calibInfo.patternInfo->patternHeight);
+	cv::Mat primaryImage;
+	cv::Mat secondaryImage;
+	if (distorted)
+	{
+		primaryImage = calibInfo.primaryImageInfo->image->clone();
+		secondaryImage = calibInfo.secondaryImageInfo->image->clone();
+	}
+	else
+	{
+		primaryImage = calibInfo.primaryImageInfo->undistortedImage->clone();
+		secondaryImage = calibInfo.secondaryImageInfo->undistortedImage->clone();
+	}
+	
+	int flags = CV_CALIB_CB_NORMALIZE_IMAGE+CV_CALIB_CB_ADAPTIVE_THRESH;
+	
+	bool okPrimary = true, okSecondary = true;
+	
+	if (distorted)
+	{
+		okPrimary = findChessboardCorners(primaryImage, size, calibInfo.primaryCorners, flags);	
+		okSecondary = findChessboardCorners(secondaryImage, size, calibInfo.secondaryCorners, flags);	
+	}
+	else
+	{
+		okPrimary = findChessboardCorners(primaryImage, size, calibInfo.undistortedPrimaryCorners, flags);
+		okSecondary = findChessboardCorners(secondaryImage, size, calibInfo.undistortedSecondaryCorners, flags);
+	}
+	if (okPrimary && okSecondary)
+	{
+		cv::Mat primaryGrayImage;
+		cv::Mat secondaryGrayImage;
+		cvtColor(primaryImage, primaryGrayImage, CV_BGR2GRAY);
+		cvtColor(secondaryImage, secondaryGrayImage, CV_BGR2GRAY);
+
+		if (distorted)
+		{
+			cornerSubPix(primaryGrayImage, calibInfo.primaryCorners, Size(5,5), Size(-1,-1), cvTermCriteria( CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
+			cornerSubPix(secondaryGrayImage, calibInfo.secondaryCorners, Size(5,5), Size(-1,-1), cvTermCriteria( CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
+		}
+		else
+		{
+			cornerSubPix(primaryGrayImage, calibInfo.undistortedPrimaryCorners, Size(5,5), Size(-1,-1), cvTermCriteria( CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
+			cornerSubPix(secondaryGrayImage, calibInfo.undistortedSecondaryCorners, Size(5,5), Size(-1,-1), cvTermCriteria( CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
+		}
+
+		return true;
+	}
+
+	if (distorted)
+	{
+		calibInfo.primaryCorners.clear();
+		calibInfo.secondaryCorners.clear();
+	}
+	else
+	{
+		calibInfo.undistortedPrimaryCorners.clear();
+		calibInfo.undistortedSecondaryCorners.clear();
+	}
+	return false;
+}
+
 bool calibrateNiKinect::calibrateIRWithOpencv(CalibrationInfo &calibInfo, bool distorted)
 {
 //	std::cout<<"calibrating ir\n";
@@ -209,7 +273,6 @@ bool calibrateNiKinect::calibrateKinectRGB (CalibrationInfo &calibInfo)
 		std::vector< std::vector<Point2f> > goodCorners;
 		std::vector< std::vector<Point3f> > patternPoints;
 		std::vector<cv::Mat> rvecs, tvecs;
-		bool ok;
 		const cv::Size imageSize(1280,1024);
 		int patternSize = calibInfo.patternInfo->patternWidth * calibInfo.patternInfo->patternHeight;
 		goodCorners.push_back(calibInfo.rgbCorners);
@@ -222,9 +285,7 @@ bool calibrateNiKinect::calibrateKinectRGB (CalibrationInfo &calibInfo)
 		calibInfo.rgbImageInfo->undistortedImage = &img;
 		undistort(*calibInfo.rgbImageInfo->image, *calibInfo.rgbImageInfo->undistortedImage, calibInfo.rgbIntrinsics, calibInfo.rgbDistortion);
 
-		ok = calibrateRGBWithOpencv(calibInfo, false);
-
-		if (ok)
+		if (calibrateRGBWithOpencv(calibInfo, false))
 		{
 			cv::Mat1f H;
 			estimate_checkerboard_pose(patternPoints[0],calibInfo.undistortedRgbCorners,calibInfo.rgbIntrinsics,H);
@@ -249,7 +310,8 @@ bool calibrateNiKinect::calibrateKinectRGB (CalibrationInfo &calibInfo)
 				cornerMatrix.at<Point2f>(row,0) = rgbCorners[0][row];
 			}
 			Size size (calibInfo.patternInfo->patternWidth, calibInfo.patternInfo->patternHeight);
-
+			
+			bool ok = true;
 			drawChessboardCorners(drawImage, size, cornerMatrix, ok);
 			calibInfo.undistortedRgbCorners = rgbCorners[0];
 			imshow(calibInfo.rgbImageInfo->windowName, drawImage);
@@ -258,6 +320,94 @@ bool calibrateNiKinect::calibrateKinectRGB (CalibrationInfo &calibInfo)
 	}	
 	return false;
 }
+
+bool calibrateNiKinect::calibrateMultiKinectRGB (CalibrationInfo &calibInfo)
+{	
+	std::vector< std::vector<Point2f> > primaryCorners;
+	std::vector< std::vector<Point2f> > secondaryCorners;
+	primaryCorners.resize(1);
+	secondaryCorners.resize(1);
+	cv::Mat1d primaryIntrinsics;
+	cv::Mat1d primaryDistortion;
+
+	cv::Mat1d secondaryIntrinsics;
+	cv::Mat1d secondaryDistortion;
+	
+	if (calibrateMultiRGBWithOpencv(calibInfo, true))
+	{
+		std::vector< std::vector<Point2f> > primaryGoodCorners, secondaryGoodCorners;
+		std::vector< std::vector<Point3f> > patternPoints;
+		std::vector<cv::Mat> prvecs, ptvecs, srvecs, stvecs;
+		bool ok;
+		const cv::Size imageSize(1280,1024);
+		int patternSize = calibInfo.patternInfo->patternWidth * calibInfo.patternInfo->patternHeight;
+		primaryGoodCorners.push_back(calibInfo.primaryCorners);
+		secondaryGoodCorners.push_back(calibInfo.secondaryCorners);
+		primaryCorners[0].resize(patternSize);
+		secondaryCorners[0].resize(patternSize);
+
+		buildCalibrationPattern(patternPoints, calibInfo.patternInfo, primaryGoodCorners.size());
+		
+		double primaryError = calibrateCamera(patternPoints, primaryGoodCorners, imageSize,  primaryIntrinsics, primaryDistortion, prvecs, ptvecs);
+		double secondaryError = calibrateCamera(patternPoints, secondaryGoodCorners, imageSize, secondaryIntrinsics, secondaryDistortion, srvecs, stvecs);
+	//	std::cout<<"error is : "<<error<<std::endl;
+		cv::Mat3b pimg = calibInfo.primaryImageInfo->image->clone();
+		cv::Mat3b simg = calibInfo.secondaryImageInfo->image->clone();
+		calibInfo.primaryImageInfo->undistortedImage = &pimg;
+		calibInfo.secondaryImageInfo->undistortedImage = &simg;
+		undistort(*calibInfo.primaryImageInfo->image, *calibInfo.primaryImageInfo->undistortedImage,  primaryIntrinsics,  primaryDistortion);
+		undistort(*calibInfo.secondaryImageInfo->image, *calibInfo.secondaryImageInfo->undistortedImage, secondaryIntrinsics, secondaryDistortion);
+
+		if (calibrateMultiRGBWithOpencv(calibInfo, false))
+		{
+			cv::Mat1f primaryH;
+			cv::Mat1f secondaryH;
+			estimate_checkerboard_pose(patternPoints[0],calibInfo.undistortedPrimaryCorners,primaryIntrinsics,primaryH);
+			estimate_checkerboard_pose(patternPoints[0],calibInfo.undistortedSecondaryCorners,secondaryIntrinsics,secondaryH);
+			
+			Pose3D primaryPose, secondaryPose;
+			primaryPose.setCameraParametersFromOpencv(primaryIntrinsics);
+			secondaryPose.setCameraParametersFromOpencv(secondaryIntrinsics);
+
+			//ntk_dbg_print(pose, 1);
+			primaryPose.setCameraTransform(primaryH);
+			secondaryPose.setCameraTransform(secondaryH);
+
+			foreach_idx(pattern_i, patternPoints[0])
+			{
+				ntk_dbg_print(patternPoints[0][pattern_i], 1);
+				Point3f prP = primaryPose.projectToImage(patternPoints[0][pattern_i]);
+				ntk_dbg_print(prP, 1);
+				primaryCorners[0][pattern_i] = Point2f(prP.x, prP.y);
+				
+				Point3f seP = secondaryPose.projectToImage(patternPoints[0][pattern_i]);
+				ntk_dbg_print(seP, 1);
+				secondaryCorners[0][pattern_i] = Point2f(seP.x, seP.y);
+			}
+
+			cv::Mat primaryDrawImage = *calibInfo.primaryImageInfo->undistortedImage;
+			cv::Mat secondaryDrawImage = *calibInfo.secondaryImageInfo->undistortedImage;
+			cv::Mat pCornerMatrix(primaryCorners[0].size(), 1, CV_32FC2);
+			cv::Mat ssCornerMatrix(secondaryCorners[0].size(), 1, CV_32FC2);
+			for (int row = 0; row <primaryCorners[0].size(); ++row)
+			{
+				pCornerMatrix.at<Point2f>(row,0) = primaryCorners[0][row];
+				ssCornerMatrix.at<Point2f>(row,0) = secondaryCorners[0][row];
+			}
+			Size size (calibInfo.patternInfo->patternWidth, calibInfo.patternInfo->patternHeight);
+
+			drawChessboardCorners(primaryDrawImage, size, pCornerMatrix, ok);
+			drawChessboardCorners(secondaryDrawImage, size, ssCornerMatrix, ok);
+			calibInfo.undistortedPrimaryCorners = primaryCorners[0];
+			calibInfo.undistortedSecondaryCorners = secondaryCorners[0];
+			imshow(calibInfo.primaryImageInfo->windowName, primaryDrawImage);
+			imshow(calibInfo.secondaryImageInfo->windowName, secondaryDrawImage);
+			return true;
+		}
+	}	
+	return false;
+}
+
 
 // Find depth intrinsics and return undistorted corners location
 bool calibrateNiKinect::calibrateKinectIR(CalibrationInfo &calibInfo)
@@ -286,11 +436,7 @@ bool calibrateNiKinect::calibrateKinectIR(CalibrationInfo &calibInfo)
 		calibInfo.irImageInfo->undistortedImage = &img2;
 		undistort(*calibInfo.irImageInfo->image, *calibInfo.irImageInfo->undistortedImage, calibInfo.irIntrinsics, calibInfo.irDistortion);
 
-		ok = calibrateIRWithOpencv(calibInfo, false);
-
-
-
-		if (ok)
+		if (calibrateIRWithOpencv(calibInfo, false))
 		{
 			cv::Mat1f H;
 			estimate_checkerboard_pose(patternPoints[0],calibInfo.undistortedIrCorners,calibInfo.irIntrinsics,H);
@@ -488,7 +634,7 @@ void calibrateNiKinect::calibrateRGBIR(niKinect *kinect, int numberOfPairs, std:
 	kinect->getCamera()->stop();
 }
 
-void calibrateNiKinect::calibrateMultiKinectRGB(niKinect *primaryKinect, niKinect *secondaryKinect, int numberOfPairs, std::string outputFile)
+void calibrateNiKinect::calibrateMultiKinect(niKinect *primaryKinect, niKinect *secondaryKinect, int numberOfPairs, std::string outputFile)
 {
 	calibrations.clear();
 	int count = 0;
@@ -529,5 +675,12 @@ void calibrateNiKinect::calibrateMultiKinectRGB(niKinect *primaryKinect, niKinec
 		secondaryKinect->getCamera()->copyImageTo(image);
 		secondaryKinect->getRGBDProcessor()->processImage(image);
 		secondaryImage = image.rawRgb();	
+		
+		//rgb
+		if (calibrateMultiKinectRGB(cInfo))
+		{
+				if (calibrateKinectStereo(cInfo))
+					count++;
+		}
 	}
 }

@@ -10,5 +10,5 @@ int main(int argc, char** argv)
     grabber.start();
 
     // Set camera tilt.
-    grabber.setTiltAngle(10);
+    grabber.setTiltAngle(atoi(argv[1]));
 }
