@@ -45,6 +45,9 @@ struct CalibrationInfo
 	ImageInfo* secondaryImageInfo;
 	PatternInfo* patternInfo;
 	
+	RGBDCalibration* primaryCalibration;
+	RGBDCalibration* secondaryCalibration;
+	
 	std::vector<Point2f> rgbCorners;
 	std::vector<Point2f> irCorners;
 	std::vector<Point2f> primaryCorners;
@@ -81,7 +84,14 @@ public:
 	static bool calibrateMultiKinectRGB (CalibrationInfo &calibInfo);
 	static bool calibrateKinectIR(CalibrationInfo &calibInfo);
 	static bool calibrateKinectStereo(CalibrationInfo &calibInfo);
+	static bool calibrateMultiKinectStereo(CalibrationInfo &calibInfo);
 	static void FindAndWriteMeans();
-	static void calibrateRGBIR(niKinect *kinect, int numberOfPairs, std::string outputFile);
-	static void calibrateMultiKinect(niKinect *primaryKinect, niKinect *secondaryKinect, int numberOfPairs, std::string outputFile);
+	static void FindAndWriteRTMeans(niKinectConfiguration *calibInfo);
+	static void calibrateRGBIR(niKinect *kinect, int numberOfPairs);
+	static void calibrateMultiKinect(niKinect *primaryKinect, niKinect *secondaryKinect, int numberOfPairs);
+	
+private:
+	static void writeData(CalibrationInfo &calibInfo);
+	static void writeRTData(CalibrationInfo &rtInfo, niKinectConfiguration *cInfo);
+	
 };

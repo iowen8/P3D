@@ -134,6 +134,7 @@ public:
 
     /*! Set whether color images should be in high resolution 1280x1024. */
     void setHighRgbResolution(bool hr) { m_high_resolution = hr; }
+    void setHighIrResolution(bool hr) { m_high_resolution = hr; }
 
     /*! Set an optional subsampling factor for the depth image. */
     void setSubsamplingFactor(int factor);

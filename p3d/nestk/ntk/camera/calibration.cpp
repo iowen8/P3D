@@ -78,6 +78,8 @@ void RGBDCalibration :: updatePoses()
     depth_pose->setCameraParametersFromOpencv(depth_intrinsics);
     depth_pose->resetCameraTransform();
     depth_pose->applyTransformBefore(T_extrinsics, R_extrinsics);
+    depth_pose->applyTransformAfter(T, R);
+   // depth_pose->toRightCamera(depth_intrinsics,R, T);
 
     *rgb_pose = *depth_pose;
     rgb_pose->toRightCamera(rgb_intrinsics, R, T);

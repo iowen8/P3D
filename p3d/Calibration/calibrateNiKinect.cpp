@@ -89,7 +89,7 @@ void estimateDepthFunction(CalibrationInfo &calibInfo)
 //ntk_dbg_print(global::depth_offset, 1);
 }
 
-void writeData(CalibrationInfo &calibInfo)
+void calibrateNiKinect::writeData(CalibrationInfo &calibInfo)
 {
 	FileStorage output_file (calibInfo.outputFile,
 		CV_STORAGE_WRITE);
@@ -100,8 +100,28 @@ void writeData(CalibrationInfo &calibInfo)
 	writeMatrix(output_file, "R", calibInfo.R);
 	writeMatrix(output_file, "T", calibInfo.T);
 	cv::Mat1i size_matrix(1,2);
-	size_matrix(0,0) = 1280;
-	size_matrix(0,1) = 1024;
+	size_matrix(0,0) = 640;
+	size_matrix(0,1) = 480;
+	writeMatrix(output_file, "rgb_size", size_matrix);
+	writeMatrix(output_file, "raw_rgb_size", size_matrix);
+	writeMatrix(output_file, "depth_size", size_matrix);
+	writeMatrix(output_file, "raw_depth_size", size_matrix);
+	output_file.release();
+}
+
+void calibrateNiKinect::writeRTData(CalibrationInfo &rtInfo, niKinectConfiguration *cInfo)
+{
+	FileStorage output_file (cInfo->getCalibrationFile(),
+		CV_STORAGE_WRITE);
+	writeMatrix(output_file, "rgb_intrinsics", cInfo->getCalibration()->rgb_intrinsics);
+	writeMatrix(output_file, "rgb_distortion", cInfo->getCalibration()->rgb_distortion);
+	writeMatrix(output_file, "depth_intrinsics", cInfo->getCalibration()->depth_intrinsics);
+	writeMatrix(output_file, "depth_distortion", cInfo->getCalibration()->depth_distortion);
+	writeMatrix(output_file, "R", rtInfo.R);
+	writeMatrix(output_file, "T", rtInfo.T);
+	cv::Mat1i size_matrix(1,2);
+	size_matrix(0,0) = 640;
+	size_matrix(0,1) = 480;
 	writeMatrix(output_file, "rgb_size", size_matrix);
 	writeMatrix(output_file, "raw_rgb_size", size_matrix);
 	writeMatrix(output_file, "depth_size", size_matrix);
@@ -159,62 +179,59 @@ bool calibrateNiKinect::calibrateMultiRGBWithOpencv(CalibrationInfo &calibInfo, 
 	Size size (calibInfo.patternInfo->patternWidth, calibInfo.patternInfo->patternHeight);
 	cv::Mat primaryImage;
 	cv::Mat secondaryImage;
-	if (distorted)
-	{
-		primaryImage = calibInfo.primaryImageInfo->image->clone();
-		secondaryImage = calibInfo.secondaryImageInfo->image->clone();
-	}
-	else
-	{
-		primaryImage = calibInfo.primaryImageInfo->undistortedImage->clone();
-		secondaryImage = calibInfo.secondaryImageInfo->undistortedImage->clone();
-	}
-	
+
+if (distorted)
+{
+	primaryImage = calibInfo.primaryImageInfo->image->clone();
+	secondaryImage = calibInfo.secondaryImageInfo->image->clone();
+}
+else 
+{
+	primaryImage = calibInfo.primaryImageInfo->undistortedImage->clone();
+	secondaryImage = calibInfo.secondaryImageInfo->undistortedImage->clone();
+}
+
 	int flags = CV_CALIB_CB_NORMALIZE_IMAGE+CV_CALIB_CB_ADAPTIVE_THRESH;
-	
+
 	bool okPrimary = true, okSecondary = true;
-	
-	if (distorted)
-	{
-		okPrimary = findChessboardCorners(primaryImage, size, calibInfo.primaryCorners, flags);	
-		okSecondary = findChessboardCorners(secondaryImage, size, calibInfo.secondaryCorners, flags);	
+
+if(distorted)
+{
+	okPrimary = findChessboardCorners(primaryImage, size, calibInfo.primaryCorners, flags);	
+	okSecondary = findChessboardCorners(secondaryImage, size, calibInfo.secondaryCorners, flags);
 	}
 	else
 	{
-		okPrimary = findChessboardCorners(primaryImage, size, calibInfo.undistortedPrimaryCorners, flags);
+		okPrimary = findChessboardCorners(primaryImage, size, calibInfo.undistortedPrimaryCorners, flags);	
 		okSecondary = findChessboardCorners(secondaryImage, size, calibInfo.undistortedSecondaryCorners, flags);
-	}
+	}	
+
 	if (okPrimary && okSecondary)
 	{
+	//	std::cout<<"both Ok\n";
 		cv::Mat primaryGrayImage;
 		cv::Mat secondaryGrayImage;
 		cvtColor(primaryImage, primaryGrayImage, CV_BGR2GRAY);
 		cvtColor(secondaryImage, secondaryGrayImage, CV_BGR2GRAY);
-
-		if (distorted)
-		{
-			cornerSubPix(primaryGrayImage, calibInfo.primaryCorners, Size(5,5), Size(-1,-1), cvTermCriteria( CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
-			cornerSubPix(secondaryGrayImage, calibInfo.secondaryCorners, Size(5,5), Size(-1,-1), cvTermCriteria( CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
-		}
-		else
-		{
-			cornerSubPix(primaryGrayImage, calibInfo.undistortedPrimaryCorners, Size(5,5), Size(-1,-1), cvTermCriteria( CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
-			cornerSubPix(secondaryGrayImage, calibInfo.undistortedSecondaryCorners, Size(5,5), Size(-1,-1), cvTermCriteria( CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
-		}
-
-		return true;
-	}
-
-	if (distorted)
-	{
-		calibInfo.primaryCorners.clear();
-		calibInfo.secondaryCorners.clear();
+if(distorted)
+{
+		cornerSubPix(primaryGrayImage, calibInfo.primaryCorners, Size(5,5), Size(-1,-1), cvTermCriteria( CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
+		cornerSubPix(secondaryGrayImage, calibInfo.secondaryCorners, Size(5,5), Size(-1,-1), cvTermCriteria( CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
 	}
 	else
 	{
-		calibInfo.undistortedPrimaryCorners.clear();
-		calibInfo.undistortedSecondaryCorners.clear();
+		cornerSubPix(primaryGrayImage, calibInfo.undistortedPrimaryCorners, Size(5,5), Size(-1,-1), cvTermCriteria( CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
+		cornerSubPix(secondaryGrayImage, calibInfo.undistortedSecondaryCorners, Size(5,5), Size(-1,-1), cvTermCriteria( CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
 	}
+	//	imshow(calibInfo.primaryImageInfo->windowName, primaryImage);
+	//	imshow(calibInfo.secondaryImageInfo->windowName, secondaryImage);
+		return true;
+	}
+
+	calibInfo.primaryCorners.clear();
+	calibInfo.secondaryCorners.clear();
+
+
 	return false;
 }
 
@@ -273,7 +290,7 @@ bool calibrateNiKinect::calibrateKinectRGB (CalibrationInfo &calibInfo)
 		std::vector< std::vector<Point2f> > goodCorners;
 		std::vector< std::vector<Point3f> > patternPoints;
 		std::vector<cv::Mat> rvecs, tvecs;
-		const cv::Size imageSize(1280,1024);
+		const cv::Size imageSize(640,480);
 		int patternSize = calibInfo.patternInfo->patternWidth * calibInfo.patternInfo->patternHeight;
 		goodCorners.push_back(calibInfo.rgbCorners);
 		rgbCorners[0].resize(patternSize);
@@ -310,7 +327,7 @@ bool calibrateNiKinect::calibrateKinectRGB (CalibrationInfo &calibInfo)
 				cornerMatrix.at<Point2f>(row,0) = rgbCorners[0][row];
 			}
 			Size size (calibInfo.patternInfo->patternWidth, calibInfo.patternInfo->patternHeight);
-			
+
 			bool ok = true;
 			drawChessboardCorners(drawImage, size, cornerMatrix, ok);
 			calibInfo.undistortedRgbCorners = rgbCorners[0];
@@ -323,364 +340,492 @@ bool calibrateNiKinect::calibrateKinectRGB (CalibrationInfo &calibInfo)
 
 bool calibrateNiKinect::calibrateMultiKinectRGB (CalibrationInfo &calibInfo)
 {	
-	std::vector< std::vector<Point2f> > primaryCorners;
-	std::vector< std::vector<Point2f> > secondaryCorners;
-	primaryCorners.resize(1);
-	secondaryCorners.resize(1);
-	cv::Mat1d primaryIntrinsics;
-	cv::Mat1d primaryDistortion;
-
-	cv::Mat1d secondaryIntrinsics;
-	cv::Mat1d secondaryDistortion;
-	
 	if (calibrateMultiRGBWithOpencv(calibInfo, true))
 	{
-		std::vector< std::vector<Point2f> > primaryGoodCorners, secondaryGoodCorners;
-		std::vector< std::vector<Point3f> > patternPoints;
-		std::vector<cv::Mat> prvecs, ptvecs, srvecs, stvecs;
-		bool ok;
-		const cv::Size imageSize(1280,1024);
-		int patternSize = calibInfo.patternInfo->patternWidth * calibInfo.patternInfo->patternHeight;
-		primaryGoodCorners.push_back(calibInfo.primaryCorners);
-		secondaryGoodCorners.push_back(calibInfo.secondaryCorners);
-		primaryCorners[0].resize(patternSize);
-		secondaryCorners[0].resize(patternSize);
+		std::cout<<"got back true\n";	
+		std::vector< std::vector<Point2f> > prgbCorners;
+		prgbCorners.resize(1);
+		std::vector< std::vector<Point2f> > srgbCorners;
+		srgbCorners.resize(1);
 
-		buildCalibrationPattern(patternPoints, calibInfo.patternInfo, primaryGoodCorners.size());
-		
-		double primaryError = calibrateCamera(patternPoints, primaryGoodCorners, imageSize,  primaryIntrinsics, primaryDistortion, prvecs, ptvecs);
-		double secondaryError = calibrateCamera(patternPoints, secondaryGoodCorners, imageSize, secondaryIntrinsics, secondaryDistortion, srvecs, stvecs);
-	//	std::cout<<"error is : "<<error<<std::endl;
+		std::vector< std::vector<Point2f> > pgoodCorners;
+		std::vector< std::vector<Point2f> > sgoodCorners;
+		std::vector< std::vector<Point3f> > patternPoints;
+		std::vector<cv::Mat> rvecs, tvecs;
+		const cv::Size imageSize(640,480);
+		int patternSize = calibInfo.patternInfo->patternWidth * calibInfo.patternInfo->patternHeight;
+		pgoodCorners.push_back(calibInfo.primaryCorners);
+		sgoodCorners.push_back(calibInfo.secondaryCorners);
+		prgbCorners[0].resize(patternSize);
+		srgbCorners[0].resize(patternSize);
+		std::cout<<"got back true here\n";	
+
+		buildCalibrationPattern(patternPoints, calibInfo.patternInfo, pgoodCorners.size());
+		std::cout<<"ptrn built\n";	
+
 		cv::Mat3b pimg = calibInfo.primaryImageInfo->image->clone();
 		cv::Mat3b simg = calibInfo.secondaryImageInfo->image->clone();
+		std::cout<<"images cloned\n";	
+		
 		calibInfo.primaryImageInfo->undistortedImage = &pimg;
 		calibInfo.secondaryImageInfo->undistortedImage = &simg;
-		undistort(*calibInfo.primaryImageInfo->image, *calibInfo.primaryImageInfo->undistortedImage,  primaryIntrinsics,  primaryDistortion);
-		undistort(*calibInfo.secondaryImageInfo->image, *calibInfo.secondaryImageInfo->undistortedImage, secondaryIntrinsics, secondaryDistortion);
+		std::cout<<"referenced for ud\n";	
+		
+		undistort(*calibInfo.primaryImageInfo->image, *calibInfo.primaryImageInfo->undistortedImage, calibInfo.primaryCalibration->rgb_intrinsics, calibInfo.primaryCalibration->rgb_distortion);
+		undistort(*calibInfo.secondaryImageInfo->image, *calibInfo.secondaryImageInfo->undistortedImage, calibInfo.secondaryCalibration->rgb_intrinsics, calibInfo.secondaryCalibration->rgb_distortion);
+		std::cout<<"got back true before again\n";	
 
 		if (calibrateMultiRGBWithOpencv(calibInfo, false))
 		{
-			cv::Mat1f primaryH;
-			cv::Mat1f secondaryH;
-			estimate_checkerboard_pose(patternPoints[0],calibInfo.undistortedPrimaryCorners,primaryIntrinsics,primaryH);
-			estimate_checkerboard_pose(patternPoints[0],calibInfo.undistortedSecondaryCorners,secondaryIntrinsics,secondaryH);
+			std::cout<<"got back true again\n";	
 			
-			Pose3D primaryPose, secondaryPose;
-			primaryPose.setCameraParametersFromOpencv(primaryIntrinsics);
-			secondaryPose.setCameraParametersFromOpencv(secondaryIntrinsics);
+			cv::Mat1f Hp;
+			cv::Mat1f Hs;
+			estimate_checkerboard_pose(patternPoints[0],calibInfo.undistortedPrimaryCorners,calibInfo.primaryCalibration->rgb_intrinsics,Hp);
+			estimate_checkerboard_pose(patternPoints[0],calibInfo.undistortedSecondaryCorners,calibInfo.secondaryCalibration->rgb_intrinsics,Hs);
+			Pose3D posep;
+			Pose3D poses;
+			posep.setCameraParametersFromOpencv(calibInfo.primaryCalibration->rgb_intrinsics);
+			poses.setCameraParametersFromOpencv(calibInfo.secondaryCalibration->rgb_intrinsics);
 
-			//ntk_dbg_print(pose, 1);
-			primaryPose.setCameraTransform(primaryH);
-			secondaryPose.setCameraTransform(secondaryH);
+				//ntk_dbg_print(pose, 1);
+			posep.setCameraTransform(Hp);
+			poses.setCameraTransform(Hs);
 
 			foreach_idx(pattern_i, patternPoints[0])
 			{
 				ntk_dbg_print(patternPoints[0][pattern_i], 1);
-				Point3f prP = primaryPose.projectToImage(patternPoints[0][pattern_i]);
-				ntk_dbg_print(prP, 1);
-				primaryCorners[0][pattern_i] = Point2f(prP.x, prP.y);
-				
-				Point3f seP = secondaryPose.projectToImage(patternPoints[0][pattern_i]);
-				ntk_dbg_print(seP, 1);
-				secondaryCorners[0][pattern_i] = Point2f(seP.x, seP.y);
+				Point3f pp = posep.projectToImage(patternPoints[0][pattern_i]);
+				ntk_dbg_print(pp, 1);
+				prgbCorners[0][pattern_i] = Point2f(pp.x, pp.y);
+				Point3f ps = poses.projectToImage(patternPoints[0][pattern_i]);
+				ntk_dbg_print(ps, 1);
+				srgbCorners[0][pattern_i] = Point2f(ps.x, ps.y);
 			}
 
-			cv::Mat primaryDrawImage = *calibInfo.primaryImageInfo->undistortedImage;
-			cv::Mat secondaryDrawImage = *calibInfo.secondaryImageInfo->undistortedImage;
-			cv::Mat pCornerMatrix(primaryCorners[0].size(), 1, CV_32FC2);
-			cv::Mat ssCornerMatrix(secondaryCorners[0].size(), 1, CV_32FC2);
-			for (int row = 0; row <primaryCorners[0].size(); ++row)
+			cv::Mat drawImagep = *calibInfo.primaryImageInfo->undistortedImage;
+			cv::Mat drawImages = *calibInfo.secondaryImageInfo->undistortedImage;
+			cv::Mat cornerMatrixp(prgbCorners[0].size(), 1, CV_32FC2);
+			cv::Mat cornerMatrixs(srgbCorners[0].size(), 1, CV_32FC2);
+			for (int row = 0; row <prgbCorners[0].size(); ++row)
 			{
-				pCornerMatrix.at<Point2f>(row,0) = primaryCorners[0][row];
-				ssCornerMatrix.at<Point2f>(row,0) = secondaryCorners[0][row];
+				cornerMatrixp.at<Point2f>(row,0) = prgbCorners[0][row];
+				cornerMatrixs.at<Point2f>(row,0) = srgbCorners[0][row];
 			}
 			Size size (calibInfo.patternInfo->patternWidth, calibInfo.patternInfo->patternHeight);
 
-			drawChessboardCorners(primaryDrawImage, size, pCornerMatrix, ok);
-			drawChessboardCorners(secondaryDrawImage, size, ssCornerMatrix, ok);
-			calibInfo.undistortedPrimaryCorners = primaryCorners[0];
-			calibInfo.undistortedSecondaryCorners = secondaryCorners[0];
-			imshow(calibInfo.primaryImageInfo->windowName, primaryDrawImage);
-			imshow(calibInfo.secondaryImageInfo->windowName, secondaryDrawImage);
+			bool ok = true;
+			drawChessboardCorners(drawImagep, size, cornerMatrixp, ok);
+			drawChessboardCorners(drawImages, size, cornerMatrixs, ok);
+			calibInfo.undistortedPrimaryCorners = prgbCorners[0];
+			calibInfo.undistortedSecondaryCorners = srgbCorners[0];
+			imshow(calibInfo.primaryImageInfo->windowName, drawImagep);
+			imshow(calibInfo.secondaryImageInfo->windowName, drawImages);
 			return true;
 		}
+		return false;
 	}	
 	return false;
 }
 
 
 // Find depth intrinsics and return undistorted corners location
-bool calibrateNiKinect::calibrateKinectIR(CalibrationInfo &calibInfo)
-{
-	std::vector< std::vector<Point2f> > irCorners;
-	irCorners.resize(1);
-	cv::Mat3b img = calibInfo.irImageInfo->image->clone();
-	Mat1f depth = kinect_shift_ir_to_depth(img);
-
-	if (calibrateIRWithOpencv(calibInfo, true))
+	bool calibrateNiKinect::calibrateKinectIR(CalibrationInfo &calibInfo)
 	{
-		//std::cout<<"got back true\n";
-		std::vector< std::vector<Point2f> > goodCorners;
-		std::vector< std::vector<Point3f> > patternPoints;
-		std::vector<cv::Mat> rvecs, tvecs;
-		const cv::Size imageSize(1280,1024);
-		int patternSize = calibInfo.patternInfo->patternWidth * calibInfo.patternInfo->patternHeight;
-		goodCorners.push_back(calibInfo.irCorners);
-		irCorners[0].resize(patternSize);
-		bool ok;
-
-		buildCalibrationPattern(patternPoints, calibInfo.patternInfo, goodCorners.size());
-		double error = calibrateCamera(patternPoints, goodCorners, imageSize, calibInfo.irIntrinsics, calibInfo.irDistortion, rvecs, tvecs);
-	//	std::cout<<"error is : "<<error<<std::endl;
-		cv::Mat3b img2 = img.clone();
-		calibInfo.irImageInfo->undistortedImage = &img2;
-		undistort(*calibInfo.irImageInfo->image, *calibInfo.irImageInfo->undistortedImage, calibInfo.irIntrinsics, calibInfo.irDistortion);
-
-		if (calibrateIRWithOpencv(calibInfo, false))
+		std::vector< std::vector<Point2f> > irCorners;
+		irCorners.resize(1);
+		if (calibrateIRWithOpencv(calibInfo, true))
 		{
-			cv::Mat1f H;
-			estimate_checkerboard_pose(patternPoints[0],calibInfo.undistortedIrCorners,calibInfo.irIntrinsics,H);
-			Pose3D pose;
-			pose.setCameraParametersFromOpencv(calibInfo.irIntrinsics);
+			std::vector< std::vector<Point2f> > goodCorners;
+			std::vector< std::vector<Point3f> > patternPoints;
+			std::vector<cv::Mat> rvecs, tvecs;
+			const cv::Size imageSize(640,480);
+			int patternSize = calibInfo.patternInfo->patternWidth * calibInfo.patternInfo->patternHeight;
+			goodCorners.push_back(calibInfo.irCorners);
+			irCorners[0].resize(patternSize);
+
+			buildCalibrationPattern(patternPoints, calibInfo.patternInfo, goodCorners.size());
+			double error = calibrateCamera(patternPoints, goodCorners, imageSize, calibInfo.irIntrinsics, calibInfo.irDistortion, rvecs, tvecs);
+	//	std::cout<<"error is : "<<error<<std::endl;
+			cv::Mat3b img = calibInfo.irImageInfo->image->clone();
+			calibInfo.irImageInfo->undistortedImage = &img;
+			undistort(*calibInfo.irImageInfo->image, *calibInfo.irImageInfo->undistortedImage, calibInfo.irIntrinsics, calibInfo.irDistortion);
+
+			if (calibrateIRWithOpencv(calibInfo, false))
+			{
+				cv::Mat1f H;
+				estimate_checkerboard_pose(patternPoints[0],calibInfo.undistortedIrCorners,calibInfo.irIntrinsics,H);
+				Pose3D pose;
+				pose.setCameraParametersFromOpencv(calibInfo.irIntrinsics);
 
 			//ntk_dbg_print(pose, 1);
-			pose.setCameraTransform(H);
+				pose.setCameraTransform(H);
 
-			foreach_idx(pattern_i, patternPoints[0])
+				foreach_idx(pattern_i, patternPoints[0])
+				{
+					ntk_dbg_print(patternPoints[0][pattern_i], 1);
+					Point3f p = pose.projectToImage(patternPoints[0][pattern_i]);
+					ntk_dbg_print(p, 1);
+					irCorners[0][pattern_i] = Point2f(p.x, p.y);
+				}
+
+				cv::Mat drawImage = *calibInfo.irImageInfo->undistortedImage;
+				cv::Mat cornerMatrix(irCorners[0].size(), 1, CV_32FC2);
+				for (int row = 0; row <irCorners[0].size(); ++row)
+				{
+					cornerMatrix.at<Point2f>(row,0) = irCorners[0][row];
+				}
+				Size size (calibInfo.patternInfo->patternWidth, calibInfo.patternInfo->patternHeight);
+
+				bool ok = true;
+				drawChessboardCorners(drawImage, size, cornerMatrix, ok);
+				calibInfo.undistortedIrCorners = irCorners[0];
+				imshow(calibInfo.irImageInfo->windowName, drawImage);
+				return true;
+			}
+		}	
+		return false;
+
+	}
+
+	bool calibrateNiKinect::calibrateKinectStereo(CalibrationInfo &calibInfo)
+	{
+		if (calibInfo.undistortedRgbCorners.size() == calibInfo.undistortedIrCorners.size())
+		{		
+			std::vector< std::vector<Point3f> > patternPoints;
+			std::vector< std::vector<Point2f> >rgb;
+			std::vector< std::vector<Point2f> >ir;
+
+			buildCalibrationPattern(patternPoints, calibInfo.patternInfo, 1);
+
+			cv::Mat E(3,3,CV_64F),F(3,3,CV_64F);
+			cv::Mat zero_dist (calibInfo.irDistortion.size(), calibInfo.irDistortion.type());
+			zero_dist = Scalar(0);
+			const cv::Size imageSize(640,480);
+			rgb.push_back(calibInfo.undistortedRgbCorners);
+			ir.push_back(calibInfo.undistortedIrCorners);
+
+			stereoCalibrate(patternPoints, rgb, ir, calibInfo.rgbIntrinsics, zero_dist,calibInfo.irIntrinsics, zero_dist, imageSize, calibInfo.R, calibInfo.T, E, F,
+				TermCriteria(TermCriteria::COUNT+TermCriteria::EPS, 50, 1e-6),
+				CALIB_FIX_INTRINSIC);
+
+			double error = computeError(F,rgb, ir);
+
+			if (error >= 1)
 			{
-				ntk_dbg_print(patternPoints[0][pattern_i], 1);
-				Point3f p = pose.projectToImage(patternPoints[0][pattern_i]);
-				ntk_dbg_print(p, 1);
-				irCorners[0][pattern_i] = Point2f(p.x, p.y);
-				double kinect_raw = depth(p.y, p.x);
-				if (!(kinect_raw < 2047)) continue;
-				ntk_dbg_print(kinect_raw, 1);
-				double linear_depth = 1.0 / (kinect_raw * -0.0030711016 + 3.3309495161);
-				const float k1 = 1.1863;
-				const float k2 = 2842.5;
-				const float k3 = 0.1236;
-				double tan_depth = k3 * tanf(kinect_raw/k2 + k1);
-				ntk_dbg_print(linear_depth, 1);
-				ntk_dbg_print(tan_depth, 1);
-				calibInfo.depthValues.push_back(DepthCalibrationPoint(kinect_raw, p.z));
+				std::cout << "Average pixel reprojection error of : " << error <<" is too large" << std::endl;
+				return false;
 			}
 
-			cv::Mat drawImage = *calibInfo.irImageInfo->undistortedImage;
-			cv::Mat cornerMatrix(irCorners[0].size(), 1, CV_32FC2);
-			for (int row = 0; row <irCorners[0].size(); ++row)
-			{
-				cornerMatrix.at<Point2f>(row,0) = irCorners[0][row];
-			}
-			Size size (calibInfo.patternInfo->patternWidth, calibInfo.patternInfo->patternHeight);
-
-			drawChessboardCorners(drawImage, size, cornerMatrix, ok);
-			calibInfo.undistortedIrCorners = irCorners[0];
-			imshow(calibInfo.irImageInfo->windowName, drawImage);
+			//calibrations.push_back(calibInfo);
 			return true;
 		}
-	}	
-	return false;
-
-}
-
-bool calibrateNiKinect::calibrateKinectStereo(CalibrationInfo &calibInfo)
-{
-	if (calibInfo.undistortedRgbCorners.size() == calibInfo.undistortedIrCorners.size())
-	{		
-		std::vector< std::vector<Point3f> > patternPoints;
-		std::vector< std::vector<Point2f> >rgb;
-		std::vector< std::vector<Point2f> >ir;
-
-		buildCalibrationPattern(patternPoints, calibInfo.patternInfo, 1);
-
-		cv::Mat E(3,3,CV_64F),F(3,3,CV_64F);
-		cv::Mat zero_dist (calibInfo.irDistortion.size(), calibInfo.irDistortion.type());
-		zero_dist = Scalar(0);
-		const cv::Size imageSize(1280,1024);
-		rgb.push_back(calibInfo.undistortedRgbCorners);
-		ir.push_back(calibInfo.undistortedIrCorners);
-
-		stereoCalibrate(patternPoints, rgb, ir, calibInfo.rgbIntrinsics, zero_dist,calibInfo.irIntrinsics, zero_dist, imageSize, calibInfo.R, calibInfo.T, E, F,
-			TermCriteria(TermCriteria::COUNT+TermCriteria::EPS, 50, 1e-6),
-			CALIB_FIX_INTRINSIC);
-
-		double error = computeError(F,rgb, ir);
-		
-		if (error >= 1)
-			std::cout << "Average pixel reprojection error of : " << error <<" is too large" << std::endl;
-		calibrations.push_back(calibInfo);
-		return true;
+		return false;
 	}
-	return false;
-}
 
-void calibrateNiKinect::FindAndWriteMeans()
-{
-	cv::Mat1d irIntrinsics;
-	cv::Mat1d irDistortion;
+	bool calibrateNiKinect::calibrateMultiKinectStereo(CalibrationInfo &calibInfo)
+	{
+		std::cout<<"here\n";
+		if (calibInfo.primaryCorners.size() == calibInfo.secondaryCorners.size())
+		{		
 
-	cv::Mat1d rgbIntrinsics;
-	cv::Mat1d rgbDistortion;
+			std::vector< std::vector<Point3f> > patternPoints;
+			std::vector< std::vector<Point2f> >primary;
+			std::vector< std::vector<Point2f> >secondary;
+		//std::cout<<"Before build calibration\n";
+
+			buildCalibrationPattern(patternPoints, calibInfo.patternInfo, 1);
+			primary.push_back(calibInfo.primaryCorners);
+			secondary.push_back(calibInfo.secondaryCorners);
+
+			cv::Mat E(3,3,CV_64F), F(3,3,CV_64F);
+		//std::cout<<"Before zero dist\n";
+			cv::Mat zero_dist (calibInfo.secondaryCalibration->depth_distortion.size(), calibInfo.secondaryCalibration->depth_distortion.type());
+		//std::cout<<"after zero dist\n";
+
+			zero_dist = Scalar(0);
+			cv::Mat1d R, T;
+		//std::cout<<"Before Stereo Calibrate\n";
+			stereoCalibrate(patternPoints, primary,secondary, calibInfo.secondaryCalibration->rgb_intrinsics,zero_dist,calibInfo.secondaryCalibration->rgb_intrinsics, zero_dist, calibInfo.secondaryCalibration->rgbSize(), R, T, E, F,
+				TermCriteria(TermCriteria::COUNT+TermCriteria::EPS, 50, 1e-6),
+				CALIB_FIX_INTRINSIC);
+		//std::cout<<"after Stereo Calibrate\n";
+
+	// OpenCV coords has y down and z toward scene.
+	// OpenGL classical 3d coords has y up and z backwards
+	// This is the transform matrix.
+
+			cv::Mat1d to_gl_base(3,3);
+			setIdentity(to_gl_base);
+			to_gl_base(1,1) = -1;
+			to_gl_base(2,2) = -1;
+
+			cv::Mat1d new_R = to_gl_base.inv() * R * to_gl_base;
+			cv::Mat1d new_T = to_gl_base * (T);
+
+			double error = computeError(F,primary, secondary);
+
+	//	if (error >= 1)
+	//	{
+			std::cout << "Average pixel reprojection error of : " << error <<" is too large" << std::endl;
+	//		return false;
+	//	}
+
+			calibInfo.secondaryCalibration->R = new_R;
+			calibInfo.secondaryCalibration->T = new_T;
+			calibInfo.secondaryCalibration->saveToFile(calibInfo.outputFile.c_str());
+
+			return true;
+		}
+		return false;
+	}
+
+	void calibrateNiKinect::FindAndWriteRTMeans(niKinectConfiguration *calibInfo)
+	{
+
 
 	// stereo transform.
-	cv::Mat1d R, T;
+		cv::Mat1d R, T;
 
-	for (int i=0; i<calibrations.size(); i++)
-	{
-		if (i == 0)
+		for (int i=0; i<calibrations.size(); i++)
 		{
+			if (i == 0)
+			{
 			//initialize sums
-			irIntrinsics = calibrations[i].irIntrinsics;
-			irDistortion = calibrations[i].irDistortion;
-			rgbIntrinsics = calibrations[i].rgbIntrinsics;
-			rgbDistortion = calibrations[i].rgbDistortion;
-			R = calibrations[i].R;
-			T = calibrations[i].T;
+				R = calibrations[i].R;
+				T = calibrations[i].T;
+			}
+			else
+			{
+				R = R + calibrations[i].R;
+				T = T + calibrations[i].T;
+			}	
 		}
-		else
-		{
-			irIntrinsics = irIntrinsics + calibrations[i].irIntrinsics;
-			irDistortion = irDistortion + calibrations[i].irDistortion;
-			rgbIntrinsics = rgbIntrinsics + calibrations[i].rgbIntrinsics;
-			rgbDistortion = rgbDistortion + calibrations[i].rgbDistortion;
-			R = R + calibrations[i].R;
-			T = T + calibrations[i].T;
-		}	
+		R = R / calibrations.size();
+		T = T / calibrations.size();
+
+		CalibrationInfo cInfo;
+		cInfo.R = R;
+		cInfo.T = T;
+		writeRTData(cInfo, calibInfo);
 	}
-	irIntrinsics = irIntrinsics / calibrations.size();
-	irDistortion = irDistortion / calibrations.size();
-	rgbIntrinsics = rgbIntrinsics / calibrations.size();
-	rgbDistortion = rgbDistortion / calibrations.size();
-	R = R / calibrations.size();
-	T = T / calibrations.size();
 
-	CalibrationInfo cInfo;
-	cInfo.irIntrinsics = irIntrinsics;
-	cInfo.irDistortion= irDistortion;
-	cInfo.rgbIntrinsics = rgbIntrinsics;
-	cInfo.rgbDistortion = rgbDistortion;
-	cInfo.R = R;
-	cInfo.T = T;
-	cInfo.outputFile = calibrations[0].outputFile;	
-	writeData(cInfo);
-}
-
-void calibrateNiKinect::calibrateRGBIR(niKinect *kinect, int numberOfPairs, std::string outputFile)
-{
-	calibrations.clear();
-	int count = 0;
-	RGBDImage image;
-
-	cv::Mat3b rgbImage;
-	cv::Mat3b irImage;
-
-	ImageInfo imageRgb, imageIr;
-
-	imageIr.type = 0;
-	imageIr.windowName = "cornersIR";
-	imageIr.image = &irImage;
-
-	imageRgb.type = 1;
-	imageRgb.windowName = "cornersRGB";
-	imageRgb.image = &rgbImage; 
-
-
-	PatternInfo patternI;
-	patternI.patternWidth = 8;
-	patternI.patternHeight = 6;
-	patternI.squareSize = 0.028;
-
-	CalibrationInfo cInfo;
-	cInfo.patternInfo = &patternI;
-	cInfo.irImageInfo = &imageIr;
-	cInfo.rgbImageInfo = &imageRgb;
-	cInfo.depthOffset = 1090;
-	cInfo.depthBaseline = 7.5e-02;
-	cInfo.outputFile = outputFile;
-
-	kinect->getCamera()->start();
-	std::cout<<"calibrating\n";
-	
-	while(count < numberOfPairs)
+	void calibrateNiKinect::FindAndWriteMeans()
 	{
+		cv::Mat1d irIntrinsics;
+		cv::Mat1d irDistortion;
+
+		cv::Mat1d rgbIntrinsics;
+		cv::Mat1d rgbDistortion;
+
+	// stereo transform.
+		cv::Mat1d R, T;
+
+		for (int i=0; i<calibrations.size(); i++)
+		{
+			if (i == 0)
+			{
+			//initialize sums
+				irIntrinsics = calibrations[i].irIntrinsics;
+				irDistortion = calibrations[i].irDistortion;
+				rgbIntrinsics = calibrations[i].rgbIntrinsics;
+				rgbDistortion = calibrations[i].rgbDistortion;
+				R = calibrations[i].R;
+				T = calibrations[i].T;
+			}
+			else
+			{
+				irIntrinsics = irIntrinsics + calibrations[i].irIntrinsics;
+				irDistortion = irDistortion + calibrations[i].irDistortion;
+				rgbIntrinsics = rgbIntrinsics + calibrations[i].rgbIntrinsics;
+				rgbDistortion = rgbDistortion + calibrations[i].rgbDistortion;
+				R = R + calibrations[i].R;
+				T = T + calibrations[i].T;
+			}	
+		}
+		irIntrinsics = irIntrinsics / calibrations.size();
+		irDistortion = irDistortion / calibrations.size();
+		rgbIntrinsics = rgbIntrinsics / calibrations.size();
+		rgbDistortion = rgbDistortion / calibrations.size();
+		R = R / calibrations.size();
+		T = T / calibrations.size();
+
+		CalibrationInfo cInfo;
+		cInfo.irIntrinsics = irIntrinsics;
+		cInfo.irDistortion= irDistortion;
+		cInfo.rgbIntrinsics = rgbIntrinsics;
+		cInfo.rgbDistortion = rgbDistortion;
+		cInfo.R = R;
+		cInfo.T = T;
+		cInfo.outputFile = calibrations[0].outputFile;	
+		writeData(cInfo);
+	}
+
+	void calibrateNiKinect::calibrateRGBIR(niKinect *kinect, int numberOfPairs)
+	{
+		calibrations.clear();
+		int count = 0;
+		RGBDImage image;
+
+		kinect->getCamera()->setHighRgbResolution(false);	
+		kinect->connectToCamera();
+
+		cv::Mat3b rgbImage;
+		cv::Mat3b irImage;
+		cv::Mat irS(480, 640, CV_32F);
+
+		ImageInfo imageRgb, imageIr;
+
+		imageIr.type = 0;
+		imageIr.windowName = "cornersIR";
+		imageIr.image = &irImage;
+
+		imageRgb.type = 1;
+		imageRgb.windowName = "cornersRGB";
+		imageRgb.image = &rgbImage; 
+
+
+		PatternInfo patternI;
+		patternI.patternWidth = 8;
+		patternI.patternHeight = 6;
+		patternI.squareSize = 0.028;
+
+		CalibrationInfo cInfo;
+		cInfo.patternInfo = &patternI;
+		cInfo.irImageInfo = &imageIr;
+		cInfo.rgbImageInfo = &imageRgb;
+		cInfo.depthOffset = 1090;
+		cInfo.depthBaseline = 7.5e-02;
+		cInfo.outputFile = kinect->getConfiguration()->getCalibrationFile();
+
+		kinect->getCamera()->start();
+		std::cout<<"calibrating\n";
+
+		while(count < numberOfPairs)
+		{
 		//get RGB image
-		kinect->getCamera()->setIRMode(false);
-		kinect->getCamera()->waitForNextFrame();
-		kinect->getCamera()->copyImageTo(image);
-		kinect->getRGBDProcessor()->processImage(image);
-		rgbImage = image.rawRgb();
+	//	std::cout<<"in while\n";
+			kinect->getCamera()->setIRMode(false);
+	//	std::cout<<"ir mode set\n";
+			kinect->getCamera()->waitForNextFrame();
+	//	std::cout<<"waititng for next frame\n";
+			kinect->getCamera()->copyImageTo(image);
+	//	std::cout<<"post processing\n";
+			kinect->getRGBDProcessor()->processImage(image);
+	//	std::cout<<"copying image\n";
+			rgbImage = image.rawRgb();
+	//	std::cout<<"rgb image recieved\n";
 
 		//get IR image
-		kinect->getCamera()->setIRMode(true);
-		kinect->getCamera()->waitForNextFrame();
-		kinect->getCamera()->copyImageTo(image);
-		kinect->getRGBDProcessor()->processImage(image);
-		irImage = toMat3b(normalize_toMat1b(image.rawIntensity()));
+			kinect->getCamera()->setIRMode(true);
+			kinect->getCamera()->waitForNextFrame();
+			kinect->getCamera()->copyImageTo(image);
+			kinect->getRGBDProcessor()->processImage(image);
+			cv::Mat orig = (cv::Mat)image.rawIntensity();
+			cvResize( &static_cast<IplImage>(orig),  &static_cast<IplImage>(irS), CV_INTER_CUBIC);
+			irImage = toMat3b(normalize_toMat1b(irS));
+	//	std::cout<<"ir image recieved\n";
+		//rgb
+			if (calibrateKinectRGB(cInfo))
+			{
+			//ir
+				if (calibrateKinectIR(cInfo))
+				{
+				//stereo
+					if (calibrateKinectStereo(cInfo))
+					{
+						writeData(cInfo);
+						count++;
+						kinect->getCamera()->setCalibrationData(*kinect->getConfiguration()->getCalibration());
+					}
+				}
+			}
+			cv::waitKey(10);
+		}
+//	FindAndWriteMeans();
+		kinect->getCamera()->stop();
+	}
+
+	void calibrateNiKinect::calibrateMultiKinect(niKinect *primaryKinect, niKinect *secondaryKinect, int numberOfPairs)
+	{
+		primaryKinect->getCamera()->setHighRgbResolution(false);	
+		secondaryKinect->getCamera()->setHighRgbResolution(false);	
+
+		primaryKinect->connectToCamera();
+		secondaryKinect->connectToCamera();
+		calibrations.clear();
+		int count = 0;
+		RGBDImage image1, image2;
+		ImageInfo primary, secondary;
+		cv::Mat3b primaryImage, secondaryImage;
+
+		primary.type = 1;
+		primary.windowName = "primaryRGB";
+		primary.image = &primaryImage;
+
+		secondary.type = 1;
+		secondary.windowName = "secondaryRGB";
+		secondary.image = &secondaryImage;
+
+		PatternInfo patternI;
+		patternI.patternWidth = 8;
+		patternI.patternHeight = 6;
+		patternI.squareSize = 0.028;
+
+		CalibrationInfo cInfo;
+		cInfo.patternInfo = &patternI;
+		cInfo.primaryImageInfo = &primary;
+		cInfo.secondaryImageInfo = &secondary;
+		cInfo.primaryCalibration = primaryKinect->getConfiguration()->getCalibration();
+		cInfo.secondaryCalibration = secondaryKinect->getConfiguration()->getCalibration();
+		cInfo.outputFile = secondaryKinect->getConfiguration()->getCalibrationFile();
+
+
+	//	primaryKinect->getCamera()->start();
+	//	secondaryKinect->getCamera()->start();
+	//	std::cout<<"waititng for next frame\n";
+	//	primaryKinect->getCamera()->waitForNextFrame();
+		primaryKinect->getCamera()->setCalibrationData(*primaryKinect->getConfiguration()->getCalibration());
+	//	std::cout<<"waititng for next frame\n";
+		
+	//	secondaryKinect->getCamera()->waitForNextFrame();
+		secondaryKinect->getCamera()->setCalibrationData(*secondaryKinect->getConfiguration()->getCalibration());
+
+//	std::cout<<"calib Info set\n";
+
+	//std::cout<<"rgb : "<primaryKinect->getConfiguration()->getCalibration()->rawRgbSize() <<"\n";
+	//	std::cout<<"depth : "<<*primaryKinect->getConfiguration()->getCalibration()->rawDepthSize() <<"\n";
+
+		primaryKinect->getCamera()->start();
+		secondaryKinect->getCamera()->start();
+		std::cout<<"calibrating\n";
+
+		while(count < numberOfPairs)
+		{	
+			primaryKinect->getCamera()->waitForNextFrame();
+			secondaryKinect->getCamera()->waitForNextFrame();
+
+			primaryKinect->getCamera()->copyImageTo(image1);
+			secondaryKinect->getCamera()->copyImageTo(image2);
+			
+			primaryKinect->getRGBDProcessor()->processImage(image1);
+			secondaryKinect->getRGBDProcessor()->processImage(image2);
+
+			primaryImage = image1.rawRgb();
+			secondaryImage = image2.rawRgb();	
 
 		//rgb
-		if (calibrateKinectRGB(cInfo))
+			if (calibrateMultiKinectRGB(cInfo))
 		{
-			//ir
-			if (calibrateKinectIR(cInfo))
-			{
-				//stereo
-				if (calibrateKinectStereo(cInfo))
+			std::cout<<"here\n";
+			if (calibrateMultiKinectStereo(cInfo))
+				std::cout<<"here2\n";
+			
 					count++;
 			}
+			cv::waitKey(10);
 		}
-		cv::waitKey(10);
+//	FindAndWriteRTMeans(secondaryKinect->getConfiguration());
+		primaryKinect->getCamera()->stop();
+		secondaryKinect->getCamera()->stop();
 	}
-	FindAndWriteMeans();
-	kinect->getCamera()->stop();
-}
-
-void calibrateNiKinect::calibrateMultiKinect(niKinect *primaryKinect, niKinect *secondaryKinect, int numberOfPairs, std::string outputFile)
-{
-	calibrations.clear();
-	int count = 0;
-	RGBDImage image;
-	ImageInfo primary, secondary;
-	cv::Mat3b primaryImage, secondaryImage;
-	
-	
-	primary.type = 1;
-	primary.windowName = "primaryRGB";
-	primary.image = &primaryImage;
-	
-	secondary.type = 1;
-	secondary.windowName = "secondaryRGB";
-	secondary.image = &secondaryImage;
-	
-	PatternInfo patternI;
-	patternI.patternWidth = 8;
-	patternI.patternHeight = 6;
-	patternI.squareSize = 0.028;
-	
-	CalibrationInfo cInfo;
-	cInfo.patternInfo = &patternI;
-	cInfo.primaryImageInfo = &primary;
-	cInfo.secondaryImageInfo = &secondary;
-	cInfo.outputFile = outputFile;
-	
-	primaryKinect->getCamera()->start();
-	secondaryKinect->getCamera()->start();
-	while(count < numberOfPairs)
-	{	
-		primaryKinect->getCamera()->waitForNextFrame();
-		primaryKinect->getCamera()->copyImageTo(image);
-		primaryKinect->getRGBDProcessor()->processImage(image);
-		primaryImage = image.rawRgb();
-		
-		secondaryKinect->getCamera()->waitForNextFrame();
-		secondaryKinect->getCamera()->copyImageTo(image);
-		secondaryKinect->getRGBDProcessor()->processImage(image);
-		secondaryImage = image.rawRgb();	
-		
-		//rgb
-		if (calibrateMultiKinectRGB(cInfo))
-		{
-				if (calibrateKinectStereo(cInfo))
-					count++;
-		}
-	}
-}

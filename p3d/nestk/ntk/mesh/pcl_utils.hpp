@@ -58,6 +58,14 @@ void rgbdImageToPointCloud(pcl::PointCloud<PointT>& cloud, const RGBDImage& imag
 
     rgbdImageToPointCloud(cloud, image, *image.calibration()->depth_pose, 1.0, keep_dense);
 }
+template <class PointT>
+void rgbdImageToPointCloudColor(pcl::PointCloud<PointT>& cloud, const RGBDImage& image, bool keep_dense)
+{
+    if (!image.calibration())
+        ntk_throw_exception("No calibration data in image.");
+
+    rgbdImageToPointCloudColor(cloud, image, *image.calibration()->depth_pose, 1.0, keep_dense);
+}
 
 template <class PointT>
 void rgbdImageToPointCloud(pcl::PointCloud<PointT>& cloud,
@@ -93,6 +101,58 @@ void rgbdImageToPointCloud(pcl::PointCloud<PointT>& cloud,
             pcl_p.x = p.x;
             pcl_p.y = p.y;
             pcl_p.z = p.z;
+            if (keep_dense)
+                cloud.points[r*cloud.width+c] = pcl_p;
+            else
+                cloud.push_back(pcl_p);
+        }   
+}
+
+template <class PointT>
+void rgbdImageToPointCloudColor(pcl::PointCloud<PointT>& cloud,
+                           const RGBDImage& image,
+                           const Pose3D& pose,
+                           int subsampling_factor,
+                           bool keep_dense)
+{
+    PointT nan_point;
+    nan_point.getVector4fMap().setConstant (std::numeric_limits<float>::quiet_NaN());
+
+    if (keep_dense)
+    {
+        cloud.width = image.depth().cols / subsampling_factor;
+        cloud.height = image.depth().rows / subsampling_factor;
+        cloud.points.resize(cloud.width*cloud.height, nan_point);
+        cloud.is_dense = true;
+    }
+    else
+    {
+        cloud.clear();
+    }
+
+    for (int r = 0; r < image.depth().rows; r += subsampling_factor)
+        for (int c = 0; c < image.depth().cols; c += subsampling_factor)
+        {
+            float d = image.depth()(r,c);            
+            bool mask_ok = !image.depthMask().data || image.depthMask()(r,c);
+            if (d < 1e-5 || !mask_ok)
+                continue;			
+			cv::Point2f mp(c, r);
+
+            cv::Point3f p = pose.unprojectFromImage(mp,d);
+            PointT pcl_p;
+			cv::Vec3b color = image.rgb()(mp);
+			RGB clr;
+			
+			clr.b = color[0];
+			clr.g = color[1];
+			clr.r = color[2];
+			
+            pcl_p.x = p.x;
+            pcl_p.y = p.y;
+            pcl_p.z = p.z;
+			pcl_p.rgb = packRgb(clr);
+			
             if (keep_dense)
                 cloud.points[r*cloud.width+c] = pcl_p;
             else

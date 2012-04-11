@@ -33,10 +33,16 @@ template void vectorToPointCloud(pcl::PointCloud<PointXYZIndex>& cloud,
                                  const std::vector<int>& indices);
 
 template void rgbdImageToPointCloud(pcl::PointCloud<pcl::PointXYZ>& cloud, const RGBDImage& image, bool keep_dense);
+template void rgbdImageToPointCloudColor(pcl::PointCloud<pcl::PointXYZRGB>& cloud, const RGBDImage& image, bool keep_dense);
 template void rgbdImageToPointCloud(pcl::PointCloud<pcl::PointNormal>& cloud, const RGBDImage& image, bool keep_dense);
 template void rgbdImageToPointCloud(pcl::PointCloud<PointXYZIndex>& cloud, const RGBDImage& image, bool keep_dense);
 
 template void rgbdImageToPointCloud(pcl::PointCloud<pcl::PointXYZ>& cloud,
+                                    const RGBDImage& image,
+                                    const Pose3D& pose,
+                                    int subsampling_factor,
+                                    bool keep_dense);
+template void rgbdImageToPointCloudColor(pcl::PointCloud<pcl::PointXYZRGB>& cloud,
                                     const RGBDImage& image,
                                     const Pose3D& pose,
                                     int subsampling_factor,
@@ -119,5 +125,24 @@ Eigen::Affine3f toPclInvCameraTransform(const Pose3D& pose)
     return mat;
 }
 
+float packRgb(RGB p)
+{
+	// pack r/g/b into rgb
+	uint8_t r = 255, g = 0, b = 0;    // Example: Red color
+	uint32_t rgb = ((uint32_t)p.r << 16 | (uint32_t)p.g << 8 | (uint32_t)p.b);
+	return *reinterpret_cast<float*>(&rgb);
+}
+
+RGB unpackRgb(float p)
+{
+	RGB c;
+	// unpack rgb into r/g/b
+	uint32_t rgb = *reinterpret_cast<int*>(&p);
+	c.r = (rgb >> 16) & 0x0000ff;
+	c.g = (rgb >> 8)  & 0x0000ff;
+	c.b = (rgb)       & 0x0000ff;
+
+	return c;
+}
 
 } // ntk

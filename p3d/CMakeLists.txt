@@ -25,6 +25,9 @@ SET (p3d_sources
 		CoordinateSpace/baseCoordinateSpace.cpp
 		CoordinateSpace/cameraCoordinateSpace.h
 		CoordinateSpace/cameraCoordinateSpace.cpp
+		Configuration/niKinectConfiguration.h
+		Configuration/niKinectConfiguration.cpp
+		Registration/Align.h
 )
 
 ADD_LIBRARY(p3d STATIC ${p3d_sources})

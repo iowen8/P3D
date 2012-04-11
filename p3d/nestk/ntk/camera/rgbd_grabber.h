@@ -82,7 +82,7 @@ public:
   virtual double frameRate() const { return m_framerate; }
 
   /*! Set the calibration data that will be included in each image. */
-  void setCalibrationData(ntk::RGBDCalibration& data)
+  virtual void setCalibrationData(ntk::RGBDCalibration& data)
   { m_calib_data = &data; m_rgbd_image.setCalibration(&data); }
 
   ntk::RGBDCalibration* calibrationData()

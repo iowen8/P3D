@@ -1,31 +1,35 @@
 #include "niKinect.h"
 #include <ntk/camera/multiple_grabber.h>
 #include <ntk/camera/rgbd_processor.h>
+#include <vector>
+#include <string>
 
 using namespace ntk;
+using namespace std;
 
-class multiNiKinect : public niKinect
+class multiNiKinect 
 {
 public:
-	multiNiKinect(int numberOfCams);
-	~multiNiKinect();
-	
-	virtual OpenniDriver getOpenniDriver();
-	MultipleGrabber* getCameras();
-	std::vector<RGBDImage>* getImages();
+	multiNiKinect(vector<string> configs);
+	~multiNiKinect(){}
+	OpenniDriver getOpenniDriver();
+	vector<niKinect*> getCameras();
+	std::vector<RGBDImage*> getImages();
 	
 	void initializeCameras();
 	void connectAndStartAll();
-	virtual void  getOpenniDriver(OpenniDriver* driver);
+	void addKinect(niKinect *kinect);
+	OpenniDriver getNiDriver();
 	
 	//void processImage(int imageId);
 	//void processImages();
-	void nextImage();
+	//void nextImage();
 	
 
 private: 
 	int numberOfCameras;
 	OpenniDriver niDriver;
-    MultipleGrabber* cameras;
-    std::vector<RGBDImage> *images;
+    vector<niKinect*> cameras;
+    std::vector<RGBDImage*> images;
+	std::vector<niKinectConfiguration> configFiles;
 };

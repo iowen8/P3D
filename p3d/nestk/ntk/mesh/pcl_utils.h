@@ -37,7 +37,15 @@
 
 namespace ntk
 {
-
+	struct RGB
+	{
+		uint8_t r, g, b;
+	};
+	
+	static float packRgb(RGB p);
+	
+	static RGB unpackRgb(float p);
+	
 typedef pcl::PointXYZRGBA PointXYZIndex;
 
 class RGBDImage;
@@ -73,7 +81,17 @@ template <class PointT>
 void rgbdImageToPointCloud(pcl::PointCloud<PointT>& cloud, const RGBDImage& image, bool keep_dense = false);
 
 template <class PointT>
+void rgbdImageToPointCloudColor(pcl::PointCloud<PointT>& cloud, const RGBDImage& image, bool keep_dense = false);
+
+template <class PointT>
 void rgbdImageToPointCloud(pcl::PointCloud<PointT>& cloud,
+                           const RGBDImage& image,
+                           const Pose3D& pose,
+                           int subsampling_factor = 1,
+                           bool keep_dense = false);
+
+template <class PointT>
+void rgbdImageToPointCloudColor(pcl::PointCloud<PointT>& cloud,
                            const RGBDImage& image,
                            const Pose3D& pose,
                            int subsampling_factor = 1,
